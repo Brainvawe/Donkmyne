@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      // In a real app we might check a custom claim or roles document.
+      // Here we assume if they can login as an admin, they are one. Or we could check admins collection:
+      return request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /users/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create: if request.auth != null && request.auth.uid == uid && request.resource.data.get('role', 'student') != 'admin';
+      allow update: if request.auth != null && (
+        isAdmin() || 
+        (request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) == false)
+      );
+      allow delete: if request.auth != null && isAdmin();
+      
+      match /enrollments/{enrollmentId} {
+        allow read, write: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      }
+      match /progress/{courseId} {
+        allow read, write: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      }
+      match /activity/{activityId} {
+        allow read, write: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      }
+      match /certificates/{certificateId} {
+        allow read, write: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      }
+    }
+
+    match /admins/{adminId} {
+      allow read: if request.auth != null && (request.auth.uid == adminId || isAdmin());
+      allow write: if isAdmin();
+    }
+    
+    match /courses/{courseId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /enrollments/{enrollmentId} {
+      allow read: if request.auth != null && (request.auth.uid == resource.data.userId || isAdmin() || request.resource == null);
+      allow write: if isAdmin() || request.auth != null;
+    }
+    
+    match /orders/{orderId} {
+      allow read: if request.auth != null && ((resource != null && resource.data.userId == request.auth.uid) || isAdmin() || request.resource == null);
+      allow write: if isAdmin() || request.auth != null;
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
